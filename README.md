@@ -1,5 +1,3 @@
-# Coding Exercise for ORNL Software Engineer Job (6694)
-
 ## Table of Contents
 
 - [Coding Exercise for ORNL Software Engineer Job (6694)](#coding-exercise-for-ornl-software-engineer-job-6694)
