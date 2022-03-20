@@ -1,0 +1,99 @@
+Flask-RESTful, a Flask extension that simplifies the creation of APIs.
+
+This is the normal way performing validation of the request data with only using Flask
+@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods = ['PUT'])
+@auth.login_required
+def update_task(task_id):
+    task = filter(lambda t: t['id'] == task_id, tasks)
+    if len(task) == 0:
+        abort(404)
+    if not request.json:
+        abort(400)
+    if 'title' in request.json and type(request.json['title']) != unicode:
+        abort(400)
+    if 'description' in request.json and type(request.json['description']) is not unicode:
+        abort(400)
+    if 'done' in request.json and type(request.json['done']) is not bool:
+        abort(400)
+    task[0]['title'] = request.json.get('title', task[0]['title'])
+    task[0]['description'] = request.json.get('description', task[0]['description'])
+    task[0]['done'] = request.json.get('done', task[0]['done'])
+    return jsonify( { 'task': make_public_task(task[0]) } )
+
+This makes sure the data given with the request is valid before using it,
+and that makes the function pretty long.
+
+Flask-RESTful provides a much better way to handle this with the RequestParser class
+
+class TaskListAPI(Resource):
+    def __init__(self):
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument('title', type = str, required = True,
+            help = 'No task title provided', location = 'json')
+        self.reqparse.add_argument('description', type = str, default = "", location = 'json')
+        super(TaskListAPI, self).__init__()
+
+    # ...
+
+class TaskAPI(Resource):
+    def __init__(self):
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument('title', type = str, location = 'json')
+        self.reqparse.add_argument('description', type = str, location = 'json')
+        self.reqparse.add_argument('done', type = bool, location = 'json')
+        super(TaskAPI, self).__init__()
+
+A side benefit of letting Flask-RESTful do the validation is that 
+now there is no need to have a handler for the bad 
+request code 400 error, this is all taken care of by the extension.
+
+ def put(self, id):
+        task = filter(lambda t: t['id'] == id, tasks)
+        if len(task) == 0:
+            abort(404)
+        task = task[0]
+        args = self.reqparse.parse_args()
+        for k, v in args.iteritems():
+            if v != None:
+                task[k] = v
+        return jsonify( { 'task': make_public_task(task) } )
+
+My original REST server generates the responses using Flask's jsonify helper function. Flask-RESTful automatically handles the conversion to JSON, so instead of this:
+
+        return jsonify( { 'task': make_public_task(task) } )
+I can do this:
+
+        return { 'task': make_public_task(task) }
+Flask-RESTful also supports passing a custom status code back when necessary:
+
+        return { 'task': make_public_task(task) }, 201 #or eturn { 'task': make_public_task(task) }
+
+But there is more. The make_public_task wrapper from the original server 
+converted a task from its internal representation to the external 
+representation that clients expected. The conversion included 
+removing the id field and adding a uri field in its place. 
+Flask-RESTful provides a helper function to do this in a 
+much more elegant way that not only generates the uri but also 
+does type conversion on the remaining fields:
+
+from flask_restful import fields, marshal
+
+task_fields = {
+    'title': fields.String,
+    'description': fields.String,
+    'done': fields.Boolean,
+    'uri': fields.Url('task')
+}
+
+class TaskAPI(Resource):
+    # ...
+
+    def put(self, id):
+        # ...
+        return { 'task': marshal(task, task_fields) }
+The task_fields structure serves as a template for the 
+marshal function. The fields.Url type is a special type
+ that generates a URL. The argument it takes is the endpoint
+  (recall that I have used explicit endpoints when 
+  I registered the resources specifically so that I can refer to 
+  them when needed).
